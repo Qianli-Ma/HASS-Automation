@@ -11,7 +11,7 @@ blueprint:
           domain: light
           multiple: True
 
-mode: single
+mode: parallel
 
 variables:
   lights: !input lights

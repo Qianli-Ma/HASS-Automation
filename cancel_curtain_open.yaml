@@ -37,14 +37,14 @@ actions:
       - conditions:
           - condition: template
             value_template: >
-              {% set opening = false %}
+              {% set ns = namespace(opening = false) %}
               {% for curtain in curtains %}
                   {% set entity_id = expand(device_entities(curtain)) | selectattr('domain', 'eq', 'cover') | map(attribute='entity_id') | first %}
                   {% if is_state(entity_id, 'opening') %}
-                  {% set opening = true %}
+                  {% set ns.opening = true %}
                 {% endif %}
               {% endfor %}
-              {{ opening }}
+              {{ ns.opening }}
         sequence:
             - action: cover.stop_cover
               target:

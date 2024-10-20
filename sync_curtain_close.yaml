@@ -41,14 +41,15 @@ actions:
       - conditions:
           - condition: template
             value_template: >
-              {% set all_closed = true %}
+              {% set ns = namespace(all_closed = true) %}
               {% for curtain in curtains %}
-                  {% set entity_id = expand(device_entities(curtain)) | selectattr('domain', 'eq', 'binary_sensor') | map(attribute='entity_id') | first %}
-                  {% if is_state(entity_id, 'on') %}
-                  {% set all_closed = false %}
+                {% set entity_id = expand(device_entities(curtain)) | selectattr('domain', 'eq', 'binary_sensor') | map(attribute='entity_id') | first %}
+                {% if is_state(entity_id, 'on') %}
+                  {% set ns.all_closed = false %}
+                  {{ ns.all_closed }}
                 {% endif %}
               {% endfor %}
-              {{ all_closed }}
+              {{ ns.all_closed }}
         sequence:
           - service: switch.turn_off
             target:

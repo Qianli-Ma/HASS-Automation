@@ -1,7 +1,7 @@
 blueprint:
-  name: Sync Curtain Open with Switch
+  name: Cancel Curtain Close with Switch
   description: >-
-    Sync curtain Open with switch, useful for those whose switch has a status light
+    Cancel curtain close with switch, useful for those whose switch has a status light
     that can be used to determine if the curtain is opening or closing.
   domain: automation
   input:

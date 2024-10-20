@@ -1,0 +1,29 @@
+blueprint:
+  name: Reset Adaptive Lighting
+  description: >-
+    Reset Adaptive Lighting for a light when it is turned off.
+  domain: automation
+  input:
+    lights:
+      name: Lights to reset
+      selector:
+        entity:
+          domain: light
+          multiple: True
+
+mode: single
+
+variables:
+  lights: !input lights
+
+trigger:
+  - platform: state
+    entity_id: !input lights
+    from: "on"
+    to: "off"
+
+actions:
+  - service: adaptive_lighting.set_manual_control
+    data:
+      manual_control: false
+      lights: "{{ trigger.entity_id }}"

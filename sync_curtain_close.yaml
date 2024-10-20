@@ -40,6 +40,7 @@ actions:
   - choose:
       - conditions:
           - condition: template
+          # todo: change to motor state so that it can stop opening or closing selectattr('domain', 'eq', 'sensor') selects the motor state
             value_template: >
               {% set ns = namespace(all_closed = true) %}
               {% for curtain in curtains %}

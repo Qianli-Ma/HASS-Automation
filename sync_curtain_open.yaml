@@ -38,6 +38,7 @@ actions:
       device_id: !input curtains
   - delay: "00:00:03"
   - choose:
+  # todo: change to motor state so that it can stop opening or closing selectattr('domain', 'eq', 'sensor') selects the motor state
       - conditions:
           - condition: template
             value_template: >

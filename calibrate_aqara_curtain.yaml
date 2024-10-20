@@ -1,0 +1,42 @@
+blueprint:
+  name: Calibrate Aqara Curtains
+  description: >-
+    A script to calibrate limits for Aqara C1/C2/C3 Curtains
+  domain: script
+  input:
+    curtains:
+      name: Curtains to calibrate
+      selector:
+        device:
+          entity:
+            - domain: cover
+          filter:
+            - manufacturer: Aqara
+          multiple: True
+
+mode: single
+
+variables:
+  curtains: !input curtains
+
+sequence:
+  - repeat:
+      for_each: "{{ curtains }}"
+      sequence:
+        - variables:
+            device_id: "{{ repeat.item }}"
+            device_name: "{{ device_attr(device_id, 'name') }}"
+            entity_id: "{{ expand(device_entities(device_id)) | selectattr('domain', 'eq', 'cover') | map(attribute='entity_id') | first }}"
+        - service: mqtt.publish
+          data:
+            qos: 0
+            retain: false
+            topic: "{{ device_name }}"
+            payload: '{ "options": { "reset_limits": true } }'
+        - service: cover.open_cover
+          target:
+            entity_id: "{{ entity_id }}"
+        - delay: "00:00:30"
+        - service: cover.close_cover
+          target:
+            entity_id: "{{ entity_id }}"

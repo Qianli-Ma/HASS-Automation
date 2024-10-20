@@ -1,0 +1,55 @@
+blueprint:
+  name: Sync Curtain Open with Switch
+  description: >-
+    Sync curtain Open with switch, useful for those whose switch has a status light
+    that can be used to determine if the curtain is opening or closing.
+  domain: automation
+  input:
+    switches:
+      name: Switches to sync with
+      selector:
+        entity:
+          multiple: True
+          filter:
+            - domain: switch
+    curtains:
+      name: Curtains to sync
+      selector:
+        device:
+          multiple: True
+          entity:
+            - domain: cover
+
+mode: single
+
+variables:
+  curtains: !input curtains
+  switches: !input switches
+
+trigger:
+  - platform: state
+    entity_id: !input switches
+    from: "off"
+    to: "on"
+
+actions:
+  - action: cover.open_cover
+    target:
+      device_id: !input curtains
+  - delay: "00:00:03"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {% set all_closed = true %}
+              {% for curtain in curtains %}
+                  {% set entity_id = expand(device_entities(my_test_json.curtain)) | selectattr('domain', 'eq', 'binary_sensor') | map(attribute='entity_id') | first %}
+                  {% if is_state(entity_id, 'on') %}
+                  {% set all_closed = false %}
+                {% endif %}
+              {% endfor %}
+              {{ all_closed }}
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: !input switches

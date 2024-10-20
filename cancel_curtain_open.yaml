@@ -1,0 +1,51 @@
+blueprint:
+  name: Cancel Curtain Open with Switch
+  description: >-
+    Cancel curtain ope with switch, useful for those whose switch has a status light
+    that can be used to determine if the curtain is opening or closing.
+  domain: automation
+  input:
+    switches:
+      name: Switches to sync with
+      selector:
+        entity:
+          multiple: True
+          filter:
+            - domain: switch
+    curtains:
+      name: Curtains to sync
+      selector:
+        device:
+          multiple: True
+          entity:
+            - domain: cover
+
+mode: single
+
+variables:
+  curtains: !input curtains
+  switches: !input switches
+
+trigger:
+  - platform: state
+    entity_id: !input switches
+    from: "on"
+    to: "off"
+
+actions:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {% set opening = false %}
+              {% for curtain in curtains %}
+                  {% set entity_id = expand(device_entities(my_test_json.curtain)) | selectattr('domain', 'eq', 'cover') | map(attribute='entity_id') | first %}
+                  {% if is_state(entity_id, 'opening') %}
+                  {% set opening = true %}
+                {% endif %}
+              {% endfor %}
+              {{ opening }}
+        sequence:
+            - action: cover.stop_cover
+              target:
+                device_id: !input curtains

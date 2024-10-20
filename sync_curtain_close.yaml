@@ -43,7 +43,7 @@ actions:
             value_template: >
               {% set all_closed = true %}
               {% for curtain in curtains %}
-                  {% set entity_id = expand(device_entities(my_test_json.curtain)) | selectattr('domain', 'eq', 'binary_sensor') | map(attribute='entity_id') | first %}
+                  {% set entity_id = expand(device_entities(curtain)) | selectattr('domain', 'eq', 'binary_sensor') | map(attribute='entity_id') | first %}
                   {% if is_state(entity_id, 'on') %}
                   {% set all_closed = false %}
                 {% endif %}

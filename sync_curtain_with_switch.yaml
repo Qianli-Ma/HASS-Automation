@@ -1,0 +1,359 @@
+blueprint:
+  name: Sync Curtain with Switch
+  description: >-
+    Sync curtain with two switch/switch groups
+    Useful for those whose switch has a status light and want to sync their statuses to determine if the curtain is opening or closing.
+  domain: automation
+  input:
+    open_switches:
+      name: Switches to sync with open curtain
+      selector:
+        entity:
+          filter:
+            domain: switch
+          multiple: true
+    close_switches:
+      name: Switches to sync with close curtain
+      selector:
+        entity:
+          filter:
+            domain: switch
+          multiple: true
+    curtains:
+      name: Curtains to sync
+      selector:
+        entity:
+          filter:
+            domain: cover
+          multiple: true
+    timeout:
+      name: Timeout for curtain to open/close
+      description: Time in seconds to wait for curtain to open/close
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: seconds
+
+trace:
+  stored_traces: 20
+
+mode: restart
+
+variables:
+  curtains: !input curtains
+  open_switches: !input open_switches
+  close_switches: !input close_switches
+  timeout: !input timeout
+
+trigger:
+  - platform: state
+    entity_id: !input open_switches
+    from: "off"
+    to: "on"
+    id: "open"
+  - platform: state
+    entity_id: !input open_switches
+    from: "on"
+    to: "off"
+    id: "stop open"
+  - platform: state
+    entity_id: !input close_switches
+    from: "off"
+    to: "on"
+    id: "close"
+  - platform: state
+    entity_id: !input close_switches
+    from: "on"
+    to: "off"
+    id: "stop close"
+  - platform: state
+    entity_id: !input curtains
+    id: "curtain opening"
+    to: "opening"
+  - platform: state
+    entity_id: !input curtains
+    id: "curtain closing"
+    to: "closing"
+
+condition:
+  - condition: template
+    value_template: "{{ trigger.to_state.context.id != this.context.id }}"
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: "open"
+        sequence:
+          - alias: "Turn off close switches"
+            repeat:
+              for_each: "{{ close_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Turn on all open switches"
+            repeat:
+              for_each: "{{ open_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'off') }}"
+                - service: switch.turn_on
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Open curtains"
+            repeat:
+              for_each: "{{ curtains }}"
+              sequence:
+                - delay:
+                    milliseconds: 200
+                - condition: template
+                  value_template: "{{ state_attr(repeat.item, 'current_position') != 100 }}"
+                - service: cover.open_cover
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Wait for curtain to open then turn off open switches"
+            wait_template: >
+              {% set ns = namespace(all_open = true) %}
+              {% for curtain in curtains %}
+                {% if state_attr(curtain, 'current_position') != 100 %}
+                  {% set ns.all_open = false %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.all_open }}
+            timeout:
+              seconds: !input timeout
+            continue_on_timeout: true
+          - repeat:
+              for_each: "{{ open_switches }}"
+              sequence:
+                - delay:
+                    milliseconds: 200
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+      - conditions:
+          - condition: trigger
+            id: "stop open"
+        sequence:
+          - alias: Sync switch status
+            repeat:
+              for_each: "{{ open_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Stop curtain if opening"
+            repeat:
+              for_each: "{{ curtains }}"
+              sequence:
+                - condition: template
+                  value_template: >
+                    {% set ns = namespace(opening = false) %}
+                    {% set motor_eid = repeat.item | replace("cover", "sensor") + "_motor_state" %}
+                    {% if is_state(motor_eid, 'opening') %}
+                      {% set ns.opening = true %}
+                    {% endif %}
+                    {{ ns.opening }}
+                - service: cover.stop_cover
+                  target:
+                    entity_id: "{{ repeat.item }}"
+      - conditions:
+          - condition: trigger
+            id: "close"
+        sequence:
+          - alias: "Turn off open switches"
+            repeat:
+              for_each: "{{ open_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Turn on all close switches"
+            repeat:
+              for_each: "{{ close_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'off') }}"
+                - service: switch.turn_on
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Close curtains"
+            repeat:
+              for_each: "{{ curtains }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ state_attr(repeat.item, 'current_position') != 0 }}"
+                - service: cover.close_cover
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Wait for curtain to close then turn off close switches"
+            wait_template: >
+              {% set ns = namespace(all_close = true) %}
+              {% for curtain in curtains %}
+                {% if state_attr(curtain, 'current_position') != 0 %}
+                  {% set ns.all_close = false %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.all_close }}
+            timeout:
+              seconds: !input timeout
+            continue_on_timeout: true
+          - repeat:
+              for_each: "{{ close_switches }}"
+              sequence:
+                - delay:
+                    milliseconds: 200
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+      - conditions:
+          - condition: trigger
+            id: "stop close"
+        sequence:
+          - alias: Sync switch status
+            repeat:
+              for_each: "{{ close_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Stop curtain if closing"
+            repeat:
+              for_each: "{{ curtains }}"
+              sequence:
+                - condition: template
+                  value_template: >
+                    {% set ns = namespace(closing = false) %}
+                    {% set motor_eid = repeat.item | replace("cover", "sensor") + "_motor_state" %}
+                    {% if is_state(motor_eid, 'closing') %}
+                      {% set ns.closing = true %}
+                    {% endif %}
+                    {{ ns.closing }}
+                - service: cover.stop_cover
+                  target:
+                    entity_id: "{{ repeat.item }}"
+      - conditions:
+          - condition: trigger
+            id: "curtain closing"
+        sequence:
+          - condition: template
+            value_template: >
+              {% set ns = namespace(all_closing = true) %}
+              {% for curtain in curtains %}
+                {% set motor_eid = curtain | replace("cover", "sensor") + "_motor_state" %}
+                {% if is_state(motor_eid, 'opening') or state_attr(curtain, 'current_position') != 0 and is_state(motor_eid, 'stopped') %}
+                  {% set ns.all_closing = false %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.all_closing }}
+          - alias: "Turn on close switches"
+            repeat:
+              for_each: "{{ close_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'off') }}"
+                - service: switch.turn_on
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Turn off open switches"
+            repeat:
+              for_each: "{{ open_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Wait for curtain to close then turn off close switches"
+            wait_template: >
+              {% set ns = namespace(all_stopped = true) %}
+              {% for curtain in curtains %}
+                {% set motor_eid = curtain | replace("cover", "sensor") + "_motor_state" %}
+                {% if not is_state(motor_eid, 'stopped') %}
+                  {% set ns.all_stopped = false %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.all_stopped }}
+            timeout:
+              seconds: !input timeout
+            continue_on_timeout: true
+          - repeat:
+              for_each: "{{ close_switches }}"
+              sequence:
+                - delay:
+                    milliseconds: 200
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+      - conditions:
+          - condition: trigger
+            id: "curtain opening"
+        sequence:
+          - condition: template
+            value_template: >
+              {% set ns = namespace(all_opening = true) %}
+              {% for curtain in curtains %}
+                {% set motor_eid = curtain | replace("cover", "sensor") + "_motor_state" %}
+                {% if is_state(motor_eid, 'closing') or state_attr(curtain, 'current_position') != 100 and is_state(motor_eid, 'stopped') %}
+                  {% set ns.all_opening = false %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.all_opening }}
+          - alias: "Turn on open switches"
+            repeat:
+              for_each: "{{ open_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'off') }}"
+                - service: switch.turn_on
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Turn off close switches"
+            repeat:
+              for_each: "{{ close_switches }}"
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+          - alias: "Wait for curtain to open then turn off open switches"
+            wait_template: >
+              {% set ns = namespace(all_stopped = true) %}
+              {% for curtain in curtains %}
+                {% set motor_eid = curtain | replace("cover", "sensor") + "_motor_state" %}
+                {% if not is_state(motor_eid, 'stopped') %}
+                  {% set ns.all_stopped = false %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.all_stopped }}
+            timeout:
+              seconds: !input timeout
+            continue_on_timeout: true
+          - repeat:
+              for_each: "{{ open_switches }}"
+              sequence:
+                - delay:
+                    milliseconds: 200
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"

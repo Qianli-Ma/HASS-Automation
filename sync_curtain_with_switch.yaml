@@ -10,14 +10,18 @@ blueprint:
       selector:
         entity:
           filter:
-            domain: switch
+            include:
+              - domain: switch
+              - domain: input_boolean
           multiple: true
     close_switches:
       name: Switches to sync with close curtain
       selector:
         entity:
           filter:
-            domain: switch
+            include:
+              - domain: switch
+              - domain: input_boolean
           multiple: true
     curtains:
       name: Curtains to sync
